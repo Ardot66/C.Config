@@ -55,16 +55,16 @@ static int GetNextCharacter(const ConfigStream *stream, int skipComments)
     return EOF;
 }
 
-void ConfigTokenFree(void *token, int tokenType);
+static void ConfigTokenFree(void *token, int tokenType);
 
-void ConfigEntryFree(ConfigEntry *entry)
+static void ConfigEntryFree(ConfigEntry *entry)
 {
     free(entry->Key);
     ConfigTokenFree(entry->Value, entry->Type);
     free(entry->Value);
 }
 
-void ConfigObjectFree(ConfigObject *configObject)
+static void ConfigObjectFree(ConfigObject *configObject)
 {
     for(int x = 0; x < configObject->Count; x++)
         ConfigEntryFree(configObject->V + x);
@@ -72,7 +72,7 @@ void ConfigObjectFree(ConfigObject *configObject)
     free(configObject->V);
 }
 
-void ConfigListFree(ConfigList *list)
+static void ConfigListFree(ConfigList *list)
 {
     size_t listTypeSize = ConfigTypeSize(list->Type);
     for(int x = 0; x < list->List.Count; x++)
@@ -86,7 +86,7 @@ void ConfigListFree(ConfigList *list)
     free(list->List.V);
 }
 
-void ConfigTokenFree(void *token, int tokenType)
+static void ConfigTokenFree(void *token, int tokenType)
 {
     switch (tokenType)
     {
@@ -95,11 +95,11 @@ void ConfigTokenFree(void *token, int tokenType)
     }
 }
 
-int ConfigTokenLoadType(const ConfigStream *stream);
-int ConfigTokenLoad(const ConfigStream *stream, ListChar *stringBuffer, int tokenType, void *tokenDest);
-int ConfigEntryLoad(const ConfigStream *stream, ListChar *stringBuffer, ConfigEntry *configEntryDest);
+static int ConfigTokenLoadType(const ConfigStream *stream);
+static int ConfigTokenLoad(const ConfigStream *stream, ListChar *stringBuffer, int tokenType, void *tokenDest);
+static int ConfigEntryLoad(const ConfigStream *stream, ListChar *stringBuffer, ConfigEntry *configEntryDest);
 
-int ConfigObjectLoad(const ConfigStream *stream, ListChar *stringBuffer, ConfigObject *configObjectDest)
+static int ConfigObjectLoad(const ConfigStream *stream, ListChar *stringBuffer, ConfigObject *configObjectDest)
 {
     ConfigObject configObject;
     Try(ListInit(&configObject, 0), -1);
@@ -132,7 +132,7 @@ int ConfigObjectLoad(const ConfigStream *stream, ListChar *stringBuffer, ConfigO
     }
 }
 
-char *ConfigStringLoad(const ConfigStream *stream, ListChar *stringBuffer)
+static char *ConfigStringLoad(const ConfigStream *stream, ListChar *stringBuffer)
 {
     int c;
     while(1)
@@ -152,7 +152,7 @@ char *ConfigStringLoad(const ConfigStream *stream, ListChar *stringBuffer)
     Throw(EINVAL, NULL, UnexpectedEOF);
 }
 
-int ConfigListLoad(const ConfigStream *stream, ListChar *stringBuffer, ConfigList *configListDest)
+static int ConfigListLoad(const ConfigStream *stream, ListChar *stringBuffer, ConfigList *configListDest)
 {
     ConfigList list;
     Try(ListInitGeneric(&list.List, 0, 1), -1);
@@ -199,7 +199,7 @@ int ConfigListLoad(const ConfigStream *stream, ListChar *stringBuffer, ConfigLis
     }
 }
 
-int ConfigEntryLoad(const ConfigStream *stream, ListChar *stringBuffer, ConfigEntry *configEntryDest)
+static int ConfigEntryLoad(const ConfigStream *stream, ListChar *stringBuffer, ConfigEntry *configEntryDest)
 {
     int c = 0;
 
@@ -231,7 +231,7 @@ int ConfigEntryLoad(const ConfigStream *stream, ListChar *stringBuffer, ConfigEn
     return 0;
 }
 
-int ConfigNumberLoad(const ConfigStream *stream, ListChar *stringBuffer, double *numberDest)
+static int ConfigNumberLoad(const ConfigStream *stream, ListChar *stringBuffer, double *numberDest)
 {
     stream->Seek(stream->Context, -1);
     int c;
@@ -254,7 +254,7 @@ int ConfigNumberLoad(const ConfigStream *stream, ListChar *stringBuffer, double 
     return 0;
 }
 
-int ConfigTokenLoadType(const ConfigStream *stream)
+static int ConfigTokenLoadType(const ConfigStream *stream)
 {
     int c;
     switch(c = GetNextCharacter(stream, 1))
@@ -268,7 +268,7 @@ int ConfigTokenLoadType(const ConfigStream *stream)
     }
 }
 
-int ConfigTokenLoad(const ConfigStream *stream, ListChar *stringBuffer, int tokenType, void *tokenDest)
+static int ConfigTokenLoad(const ConfigStream *stream, ListChar *stringBuffer, int tokenType, void *tokenDest)
 {
     switch (tokenType)
     {
