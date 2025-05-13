@@ -11,7 +11,7 @@ typedef struct ConfigStream
     void *Context;
     int (*Seek)(void *context, off64_t offset);
     int (*ReadC)(void *context);
-    int (*WriteC)(void *context, int character);
+    int (*WriteC)(void *context, char character);
 } ConfigStream;
 
 typedef struct ConfigEntry

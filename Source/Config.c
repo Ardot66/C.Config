@@ -320,7 +320,82 @@ void ConfigFree(ConfigObject *configObject)
     ConfigObjectFree(configObject);
 }
 
+static int ConfigTokenSave(const ConfigStream *stream, int tokenType, void *token);
+
+static int ConfigEntrySave(const ConfigStream *stream, ConfigEntry *entry)
+{
+    for(char *key = entry->Key; *key != '\0'; key++)
+        Try(stream->WriteC(stream->Context, *key), -1);
+
+    Try(stream->WriteC(stream->Context, ':'), -1);
+    Try(ConfigTokenSave(stream, entry->Type, entry->Value), -1);
+    return 0;
+}
+
+static int ConfigObjectSave(const ConfigStream *stream, ConfigObject *object)
+{
+    Try(stream->WriteC(stream->Context, '{'), -1);
+    for(int x = 0; x < object->Count; x++)
+    {
+        Try(ConfigEntrySave(stream, object->V + x), -1);
+        if(x + 1 < object->Count)
+            Try(stream->WriteC(stream->Context, ','), -1);
+    }
+    Try(stream->WriteC(stream->Context, '}'), -1);
+    return 0;
+}
+
+static int ConfigListSave(const ConfigStream *stream, ConfigList *list)
+{
+    Try(stream->WriteC(stream->Context, '['), -1);
+
+    size_t configTypeSize = ConfigTypeSize(list->Type);
+    for(int x = 0; x < list->List.Count; x++)
+    {
+        void *token  = list->List.V + x * configTypeSize;
+
+        Try(ConfigTokenSave(stream, list->Type, token), -1);
+        if(x + 1 < list->List.Count)
+            Try(stream->WriteC(stream->Context, ','), -1);
+    }
+
+    Try(stream->WriteC(stream->Context, ']'), -1);
+}
+
+static int ConfigStringSave(const ConfigStream *stream, char *string)
+{
+    Try(stream->WriteC(stream->Context, '"'), -1);
+    for(; *string != '\0'; string++)
+        Try(stream->WriteC(stream->Context, *string), -1);
+    Try(stream->WriteC(stream->Context, '"'), -1);
+        
+    return 0;
+}
+
+static int ConfigNumberSave(const ConfigStream *stream, double *number)
+{
+    size_t length = snprintf(NULL, 0, "%f", *number);
+    char numString[length];
+    snprintf(numString, length + 1, "%f", *number);
+    for(int x = 0; x < length; x++)
+        Try(stream->WriteC(stream->Context, numString[x]), -1);
+
+    return 0;
+}
+
+static int ConfigTokenSave(const ConfigStream *stream, int tokenType, void *token)
+{
+    switch(tokenType)
+    {
+        case ConfigEntryObject: return ConfigObjectSave(stream, token);
+        case ConfigEntryList: return ConfigListSave(stream, token);
+        case ConfigEntryString: return ConfigStringSave(stream, *(char **)token);
+        case ConfigEntryNumber: return ConfigNumberSave(stream, token);
+        default: Throw(EINVAL, -1, "Invalid config token type");
+    }
+}
+
 int ConfigSave(const ConfigStream *stream, ConfigObject *config)
 {
-
+    return ConfigObjectSave(stream, config);
 }

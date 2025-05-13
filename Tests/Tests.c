@@ -3,6 +3,8 @@
 #include "Config.h"
 #include "TestingUtilities.h"
 
+TypedefList(char, ListChar);
+
 int ConfigStreamSeek(void *context, off64_t offset)
 {
     *(char **)context += offset;
@@ -16,11 +18,18 @@ int ConfigStreamRead(void *context)
     return character == '\0' ? EOF : character;
 }
 
+int ConfigStreamWrite(void *context, char character)
+{
+    ListChar *list = context;
+    Try(ListAdd(list, &character), -1);
+    return 0;
+}
+
 char *TestCases[] =
 {
     "{}",
     "{#a#}",
-    "{number: 1}"
+    "{number: 1}",
     "{list: [1, 2, 3]}",
     "{object: {}}",
     "{string: \"this is a string\"}",
@@ -45,7 +54,9 @@ int main(int argc, char **argv)
 {
     ConfigObject *config;
     
-    ConfigStream stream = (ConfigStream){.Seek = ConfigStreamSeek, .ReadC = ConfigStreamRead};
+    ListChar outputList;
+    Try(ListInit(&outputList, 64), -1);
+    ConfigStream stream = (ConfigStream){.Seek = ConfigStreamSeek, .ReadC = ConfigStreamRead, .WriteC = ConfigStreamWrite};
     for(int x = 0; x < TestCaseCount; x++)
     {
         char *testCase = TestCases[x];
@@ -54,6 +65,15 @@ int main(int argc, char **argv)
         TEST((config = ConfigLoad(&stream)), !=, NULL, p, 
             ErrorInfoPrint(&ErrorCurrent);
         );
+
+        stream.Context = &outputList;
+        TEST(ConfigSave(&stream, config), ==, 0, d,
+            ErrorInfoPrint(&ErrorCurrent);
+        );
+        char end = '\0';
+        Try(ListAdd(&outputList, &end), -1);
+        printf("%s\n", outputList.V);
+        ListClear(&outputList);
 
         ConfigFree(config);
     }
