@@ -31,11 +31,11 @@ static int ListCharToString(ListChar *list, char **stringDest)
     return 0;
 }
 
-static int GetNextCharacter(FILE *file, int skipComments)
+static int GetNextCharacter(const ConfigStream *stream, int skipComments)
 {
     int c;
     int inComment = 0;
-    while((c = fgetc(file)) != EOF)
+    while((c = stream->ReadC(stream->Context)) != EOF)
     {
         if(c == ' ' || c == '\n' || c == '\t' || c == '\r')
             continue;
@@ -95,24 +95,30 @@ void ConfigTokenFree(void *token, int tokenType)
     }
 }
 
-int ConfigTokenLoadType(FILE *file);
-int ConfigTokenLoad(FILE *file, ListChar *stringBuffer, int tokenType, void *tokenDest);
-int ConfigEntryLoad(FILE *file, ListChar *stringBuffer, ConfigEntry *configEntryDest);
+int ConfigTokenLoadType(const ConfigStream *stream);
+int ConfigTokenLoad(const ConfigStream *stream, ListChar *stringBuffer, int tokenType, void *tokenDest);
+int ConfigEntryLoad(const ConfigStream *stream, ListChar *stringBuffer, ConfigEntry *configEntryDest);
 
-int ConfigObjectLoad(FILE *file, ListChar *stringBuffer, ConfigObject *configObjectDest)
+int ConfigObjectLoad(const ConfigStream *stream, ListChar *stringBuffer, ConfigObject *configObjectDest)
 {
     ConfigObject configObject;
     Try(ListInit(&configObject, 0), -1);
 
     int c;
+    c = GetNextCharacter(stream, 1);
+    if(c == '}')
+    {
+        *configObjectDest = configObject;
+        return 0;
+    }
+    stream->Seek(stream->Context, -1);
     while(1)
     {
-        fseek(file, -1, SEEK_CUR);
         ConfigEntry entry;
-        Try(ConfigEntryLoad(file, stringBuffer, &entry), -1, ConfigObjectFree(&configObject););
+        Try(ConfigEntryLoad(stream, stringBuffer, &entry), -1, ConfigObjectFree(&configObject););
         Try(ListAdd(&configObject, &entry), -1, ConfigObjectFree(&configObject););
 
-        c = GetNextCharacter(file, 1);
+        c = GetNextCharacter(stream, 1);
         if(c == '}')
         {
             *configObjectDest = configObject;
@@ -126,12 +132,12 @@ int ConfigObjectLoad(FILE *file, ListChar *stringBuffer, ConfigObject *configObj
     }
 }
 
-char *ConfigStringLoad(FILE *file, ListChar *stringBuffer)
+char *ConfigStringLoad(const ConfigStream *stream, ListChar *stringBuffer)
 {
     int c;
     while(1)
     {
-        c = GetNextCharacter(file, 0);
+        c = GetNextCharacter(stream, 0);
 
         if(c == '"')
         {
@@ -146,7 +152,7 @@ char *ConfigStringLoad(FILE *file, ListChar *stringBuffer)
     Throw(EINVAL, NULL, UnexpectedEOF);
 }
 
-int ConfigListLoad(FILE *file, ListChar *stringBuffer, ConfigList *configListDest)
+int ConfigListLoad(const ConfigStream *stream, ListChar *stringBuffer, ConfigList *configListDest)
 {
     ConfigList list;
     Try(ListInitGeneric(&list.List, 0, 1), -1);
@@ -155,7 +161,8 @@ int ConfigListLoad(FILE *file, ListChar *stringBuffer, ConfigList *configListDes
 
     while (1)
     {
-        int tokenType = ConfigTokenLoadType(file);
+        int tokenType;
+        Try((tokenType = ConfigTokenLoadType(stream)) == -1, -1, free(list.List.V););
         if(list.Type == ConfigEntryInvalid)
         {
             list.Type = tokenType;
@@ -169,7 +176,7 @@ int ConfigListLoad(FILE *file, ListChar *stringBuffer, ConfigList *configListDes
         }
 
         char token[listTypeSize];
-        Try(ConfigTokenLoad(file, stringBuffer, list.Type, token), -1,
+        Try(ConfigTokenLoad(stream, stringBuffer, list.Type, token), -1,
             ConfigTokenFree(token, list.Type);
             ConfigListFree(&list);
         );
@@ -178,7 +185,7 @@ int ConfigListLoad(FILE *file, ListChar *stringBuffer, ConfigList *configListDes
             ConfigListFree(&list);
         );
 
-        int nextChar = GetNextCharacter(file, 1);
+        int nextChar = GetNextCharacter(stream, 1);
         if(nextChar == ',')
             continue;
         else if (nextChar == ']')
@@ -192,13 +199,13 @@ int ConfigListLoad(FILE *file, ListChar *stringBuffer, ConfigList *configListDes
     }
 }
 
-int ConfigEntryLoad(FILE *file, ListChar *stringBuffer, ConfigEntry *configEntryDest)
+int ConfigEntryLoad(const ConfigStream *stream, ListChar *stringBuffer, ConfigEntry *configEntryDest)
 {
     int c = 0;
 
     while (1)
     {
-        if((c = GetNextCharacter(file, 1)) == EOF)  
+        if((c = GetNextCharacter(stream, 1)) == EOF)  
             Throw(EINVAL, -1, UnexpectedEOF);
         if(c == ':')
             break;
@@ -207,7 +214,7 @@ int ConfigEntryLoad(FILE *file, ListChar *stringBuffer, ConfigEntry *configEntry
 
     Try(ListCharToString(stringBuffer, &configEntryDest->Key), -1);
 
-    if((configEntryDest->Type = ConfigTokenLoadType(file)) == -1)
+    if((configEntryDest->Type = ConfigTokenLoadType(stream)) == -1)
     {
         free(configEntryDest->Key);
         return -1;
@@ -216,7 +223,7 @@ int ConfigEntryLoad(FILE *file, ListChar *stringBuffer, ConfigEntry *configEntry
     TryNotNull(configEntryDest->Value = malloc(ConfigTypeSize(configEntryDest->Type)), -1,
         free(configEntryDest->Key);
     );
-    Try(ConfigTokenLoad(file, stringBuffer, configEntryDest->Type, configEntryDest->Value), -1,
+    Try(ConfigTokenLoad(stream, stringBuffer, configEntryDest->Type, configEntryDest->Value), -1,
         free(configEntryDest->Key);
         free(configEntryDest->Value);
     );
@@ -224,10 +231,33 @@ int ConfigEntryLoad(FILE *file, ListChar *stringBuffer, ConfigEntry *configEntry
     return 0;
 }
 
-int ConfigTokenLoadType(FILE *file)
+int ConfigNumberLoad(const ConfigStream *stream, ListChar *stringBuffer, double *numberDest)
+{
+    stream->Seek(stream->Context, -1);
+    int c;
+    while((c = GetNextCharacter(stream, 1)) != EOF)
+    {
+        switch(c)
+        {
+            case '.':
+            case '0' ... '9': 
+                Try(ListAdd(stringBuffer, &c), -1);
+                break;
+            default: goto Done;
+        }
+    }
+
+    Done:
+    stream->Seek(stream->Context, -1);
+    *(double *)numberDest = strtod(stringBuffer->V, NULL);
+    ListClear(stringBuffer);
+    return 0;
+}
+
+int ConfigTokenLoadType(const ConfigStream *stream)
 {
     int c;
-    switch(c = GetNextCharacter(file, 1))
+    switch(c = GetNextCharacter(stream, 1))
     {
         case EOF: Throw(EINVAL, -1, UnexpectedEOF);
         case '{': return ConfigEntryObject;
@@ -238,31 +268,28 @@ int ConfigTokenLoadType(FILE *file)
     }
 }
 
-int ConfigTokenLoad(FILE *file, ListChar *stringBuffer, int tokenType, void *tokenDest)
+int ConfigTokenLoad(const ConfigStream *stream, ListChar *stringBuffer, int tokenType, void *tokenDest)
 {
     switch (tokenType)
     {
         case ConfigEntryObject:
-            Try(ConfigObjectLoad(file, stringBuffer, tokenDest), -1);
+            Try(ConfigObjectLoad(stream, stringBuffer, tokenDest), -1);
             break;
         case ConfigEntryList:
-            Try(ConfigListLoad(file, stringBuffer, tokenDest), -1);
+            Try(ConfigListLoad(stream, stringBuffer, tokenDest), -1);
             break;
         case ConfigEntryString:
-            TryNotNull(*(char **)tokenDest = ConfigStringLoad(file, stringBuffer), -1);
+            TryNotNull(*(char **)tokenDest = ConfigStringLoad(stream, stringBuffer), -1);
             break;
         case ConfigEntryNumber:
-        {
-            fseek(file, -1, SEEK_CUR);
-            Try(fscanf(file, "%f", tokenDest) < 1, -1);
+            Try(ConfigNumberLoad(stream, stringBuffer, tokenDest), -1);
             break;
-        }
     }
 
     return 0;
 }
 
-ConfigObject *ConfigLoad(FILE *file)
+ConfigObject *ConfigLoad(const ConfigStream *stream)
 {
     ListChar stringBuffer;
     Try(ListInit(&stringBuffer, 32), NULL);
@@ -271,7 +298,7 @@ ConfigObject *ConfigLoad(FILE *file)
         free(stringBuffer.V);
     );
 
-    int c = GetNextCharacter(file, 1);
+    int c = GetNextCharacter(stream, 1);
 
     if(c != '{')
     {
@@ -279,7 +306,7 @@ ConfigObject *ConfigLoad(FILE *file)
         Throw(EINVAL, NULL, UnexpectedNonWhitespace);
     }
 
-    if(ConfigObjectLoad(file, &stringBuffer, object))
+    if(ConfigObjectLoad(stream, &stringBuffer, object))
     {
         free(object);
         object = NULL;
@@ -288,7 +315,12 @@ ConfigObject *ConfigLoad(FILE *file)
     return object;
 }
 
-int ConfigSave(FILE *file, ConfigObject *config)
+void ConfigFree(ConfigObject *configObject)
+{
+    ConfigObjectFree(configObject);
+}
+
+int ConfigSave(const ConfigStream *stream, ConfigObject *config)
 {
 
 }

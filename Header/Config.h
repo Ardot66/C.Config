@@ -6,6 +6,14 @@
 
 enum ConfigEntryType {ConfigEntryInvalid, ConfigEntryObject, ConfigEntryList, ConfigEntryString, ConfigEntryNumber};
 
+typedef struct ConfigStream
+{
+    void *Context;
+    int (*Seek)(void *context, off64_t offset);
+    int (*ReadC)(void *context);
+    int (*WriteC)(void *context, int character);
+} ConfigStream;
+
 typedef struct ConfigEntry
 {
     char *Key;
@@ -21,7 +29,8 @@ typedef struct ConfigList
 
 TypedefList(ConfigEntry, ConfigObject);
 
-ConfigObject *ConfigLoad(FILE *file);
-int ConfigSave(FILE *file, ConfigObject *config); 
+ConfigObject *ConfigLoad(const ConfigStream *stream);
+void ConfigFree(ConfigObject *configObject);
+int ConfigSave(const ConfigStream *stream, ConfigObject *config); 
 
 #endif
