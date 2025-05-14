@@ -13,10 +13,10 @@ static size_t ConfigTypeSize(int configType)
 {
     switch (configType)
     {
-        case ConfigEntryObject: return sizeof(ConfigObject);
-        case ConfigEntryList: return sizeof(ConfigList);
-        case ConfigEntryString: return sizeof(char *);
-        case ConfigEntryNumber: return sizeof(double);
+        case ConfigTypeObject: return sizeof(ConfigObject);
+        case ConfigTypeList: return sizeof(ConfigList);
+        case ConfigTypeString: return sizeof(char *);
+        case ConfigTypeNumber: return sizeof(double);
         default: Throw(EINVAL, -1, "Invalid config data type");
     }
 }
@@ -79,7 +79,7 @@ static void ConfigListFree(ConfigList *list)
     {
         void *element = list->List.V + x * listTypeSize;
         ConfigTokenFree(element, list->Type);
-        if(list->Type == ConfigEntryString)
+        if(list->Type == ConfigTypeString)
             free(*(char **)element);
     }
 
@@ -90,8 +90,8 @@ static void ConfigTokenFree(void *token, int tokenType)
 {
     switch (tokenType)
     {
-        case ConfigEntryObject: ConfigObjectFree(token); break;
-        case ConfigEntryList: ConfigListFree(token); break;
+        case ConfigTypeObject: ConfigObjectFree(token); break;
+        case ConfigTypeList: ConfigListFree(token); break;
     }
 }
 
@@ -156,14 +156,14 @@ static int ConfigListLoad(const ConfigStream *stream, ListChar *stringBuffer, Co
 {
     ConfigList list;
     Try(ListInitGeneric(&list.List, 0, 1), -1);
-    list.Type = ConfigEntryInvalid;
+    list.Type = ConfigTypeInvalid;
     size_t listTypeSize;
 
     while (1)
     {
         int tokenType;
         Try((tokenType = ConfigTokenLoadType(stream)) == -1, -1, free(list.List.V););
-        if(list.Type == ConfigEntryInvalid)
+        if(list.Type == ConfigTypeInvalid)
         {
             list.Type = tokenType;
             listTypeSize = ConfigTypeSize(list.Type);
@@ -260,10 +260,10 @@ static int ConfigTokenLoadType(const ConfigStream *stream)
     switch(c = GetNextCharacter(stream, 1))
     {
         case EOF: Throw(EINVAL, -1, UnexpectedEOF);
-        case '{': return ConfigEntryObject;
-        case '[': return ConfigEntryList;
-        case '"': return ConfigEntryString;
-        case '0' ... '9': return ConfigEntryNumber;
+        case '{': return ConfigTypeObject;
+        case '[': return ConfigTypeList;
+        case '"': return ConfigTypeString;
+        case '0' ... '9': return ConfigTypeNumber;
         default: Throw(EINVAL, -1, "Invalid token type '%c'", c);
     }
 }
@@ -272,16 +272,16 @@ static int ConfigTokenLoad(const ConfigStream *stream, ListChar *stringBuffer, i
 {
     switch (tokenType)
     {
-        case ConfigEntryObject:
+        case ConfigTypeObject:
             Try(ConfigObjectLoad(stream, stringBuffer, tokenDest), -1);
             break;
-        case ConfigEntryList:
+        case ConfigTypeList:
             Try(ConfigListLoad(stream, stringBuffer, tokenDest), -1);
             break;
-        case ConfigEntryString:
+        case ConfigTypeString:
             TryNotNull(*(char **)tokenDest = ConfigStringLoad(stream, stringBuffer), -1);
             break;
-        case ConfigEntryNumber:
+        case ConfigTypeNumber:
             Try(ConfigNumberLoad(stream, stringBuffer, tokenDest), -1);
             break;
     }
@@ -387,10 +387,10 @@ static int ConfigTokenSave(const ConfigStream *stream, int tokenType, void *toke
 {
     switch(tokenType)
     {
-        case ConfigEntryObject: return ConfigObjectSave(stream, token);
-        case ConfigEntryList: return ConfigListSave(stream, token);
-        case ConfigEntryString: return ConfigStringSave(stream, *(char **)token);
-        case ConfigEntryNumber: return ConfigNumberSave(stream, token);
+        case ConfigTypeObject: return ConfigObjectSave(stream, token);
+        case ConfigTypeList: return ConfigListSave(stream, token);
+        case ConfigTypeString: return ConfigStringSave(stream, *(char **)token);
+        case ConfigTypeNumber: return ConfigNumberSave(stream, token);
         default: Throw(EINVAL, -1, "Invalid config token type");
     }
 }

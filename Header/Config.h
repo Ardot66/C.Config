@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include "CollectionsPlus.h"
 
-enum ConfigEntryType {ConfigEntryInvalid, ConfigEntryObject, ConfigEntryList, ConfigEntryString, ConfigEntryNumber};
+enum ConfigEntryType {ConfigTypeInvalid, ConfigTypeObject, ConfigTypeList, ConfigTypeString, ConfigTypeNumber};
 
 typedef struct ConfigStream
 {
