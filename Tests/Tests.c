@@ -27,12 +27,12 @@ int ConfigStreamWrite(void *context, char character)
 
 char *TestCases[] =
 {
+    "{string: \"this is a string\"}",
     "{}",
     "{#a#}",
     "{number: 1}",
     "{list: [1, 2, 3]}",
     "{object: {}}",
-    "{string: \"this is a string\"}",
     "{test:[[1, 2], [{}, {}]]}",
     "{##a:1}"
 };
@@ -53,8 +53,9 @@ const size_t FailCaseCount = sizeof(FailCases) / sizeof(*FailCases);
 int main(int argc, char **argv)
 {
     ConfigObject *config;
-    
+
     ListChar outputList;
+    
     Try(ListInit(&outputList, 64), -1);
     ConfigStream stream = (ConfigStream){.Seek = ConfigStreamSeek, .ReadC = ConfigStreamRead, .WriteC = ConfigStreamWrite};
     for(int x = 0; x < TestCaseCount; x++)
@@ -72,12 +73,25 @@ int main(int argc, char **argv)
         );
         char end = '\0';
         Try(ListAdd(&outputList, &end), -1);
-        printf("%s\n", outputList.V);
+        printf("%s\n", outputList.V);   
         ListClear(&outputList);
 
         ConfigFree(config);
     }
 
+    ConfigObject configLocal;
+    ConfigObjectInit(&configLocal);
+    char *string = "Amogus";
+    ConfigEntryAdd(&configLocal, "Test", &string, ConfigTypeString);
+    stream.Context = &outputList;
+    TEST(ConfigSave(&stream, &configLocal), ==, 0, d,
+        ErrorInfoPrint(&ErrorCurrent);
+    );
+    char end = '\0';
+    Try(ListAdd(&outputList, &end), -1);
+    printf("%s\n", outputList.V);   
+    ListClear(&outputList);
+    ConfigFree(&configLocal);
     printf("--- Testing Errors\n");
 
     for(int x = 0; x < FailCaseCount; x++)
